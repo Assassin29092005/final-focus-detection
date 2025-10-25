@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Proctoring</title>
+    <style>
+        :root {
+            --color-bg: #1a1a2e;
+            --color-surface: #1f2041;
+            --color-primary: #4e4ecf;
+            --color-text: #e0e0e0;
+            --color-text-secondary: #a0a0a0;
+            --color-green: #2ecc71;
+            --color-red: #e74c3c;
+            --color-orange: #f39c12;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --border-radius: 12px;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            margin: 0;
+            padding: 2rem;
+            display: grid;
+            place-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+
+        .main-content {
+            background-color: var(--color-surface);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: var(--color-primary);
+            margin-top: 0;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%; /* 16:9 Aspect Ratio */
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+
+        #webcam {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror view */
+        }
+        
+        #controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        button {
+            font-family: var(--font-family);
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        #startButton {
+            background-color: var(--color-primary);
+            color: white;
+        }
+        #startButton:hover:not(:disabled) { background-color: #3a3ab8; }
+        
+        #endButton {
+            background-color: #666;
+            color: white;
+        }
+        #endButton:hover:not(:disabled) { background-color: var(--color-red); }
+
+        button:disabled {
+            background-color: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        .status-box {
+            padding: 1.5rem;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            border-left: 5px solid var(--color-primary);
+        }
+
+        #status {
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        #status.status-good { border-color: var(--color-green); color: var(--color-green); }
+        #status.status-bad { border-color: var(--color-red); color: var(--color-red); }
+        #status.status-warn { border-color: var(--color-orange); color: var(--color-orange); }
+
+        .sidebar {
+            background-color: var(--color-surface);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            height: fit-content;
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        h2 {
+            margin-top: 0;
+            color: var(--color-text);
+            border-bottom: 2px solid var(--color-primary);
+            padding-bottom: 0.5rem;
+        }
+
+        #event-log-container {
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        
+        .log-entry {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.9rem;
+            padding: 0.75rem;
+            border-bottom: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+        }
+        .log-entry:last-child { border-bottom: none; }
+        
+        .log-time {
+            font-size: 0.8rem;
+            color: var(--color-text-secondary);
+            margin-bottom: 0.25rem;
+        }
+        
+        .log-event { font-weight: 600; }
+        .log-event-PHONE_DETECTED, .log-event-UNAUTHORIZED_PERSON, .log-event-MULTIPLE_FACES { color: var(--color-red); }
+        .log-event-LOOKING_AWAY { color: var(--color-orange); }
+        .log-event-FACE_NOT_FOUND { color: var(--color-text-secondary); }
+        .log-event-AUTHORIZED, .log-event-SESSION_ENDED { color: var(--color-green); }
+        .log-event-ERROR { color: var(--color-red); font-weight: 700; }
+
+        @media (max-width: 900px) {
+            body { padding: 1rem; }
+            .container {
+                grid-template-columns: 1fr;
+            }
+            .sidebar {
+                max-height: 40vh;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <main class="main-content">
+            <h1>Exam Proctoring Session</h1>
+            
+            <div class="video-container">
+                <video id="webcam" autoplay muted playsinline></video>
+                <!-- This canvas is used for capturing frames, but is not visible -->
+                <canvas id="captureCanvas" style="display: none;"></canvas>
+            </div>
+
+            <div id="controls">
+                <button id="startButton">Start Session</button>
+                <button id="endButton" disabled>End Test</button>
+            </div>
+
+            <div class="status-box">
+                <p id="status">Status: Not Connected</p>
+            </div>
+        </main>
+
+        <aside class="sidebar">
+            <h2>Event Log</h2>
+            <div id="event-log-container">
+                <div id="event-log"></div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('captureCanvas');
+        const startButton = document.getElementById('startButton');
+        const endButton = document.getElementById('endButton');
+        const statusEl = document.getElementById('status');
+        const eventLog = document.getElementById('event-log');
+
+        // --- Configuration ---
+        const WEBSOCKET_URL = "ws://localhost:8765";
+        
+        // --- THIS IS THE CHANGED VALUE ---
+        // It was 500 (2 frames/sec), now it is 2000 (1 frame/2 sec)
+        const FRAME_INTERVAL_MS = 2000; 
+
+        // --- State ---
+        let socket = null;
+        let proctoringInterval = null;
+        let stream = null;
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', startSession);
+        endButton.addEventListener('click', endSession);
+
+        /**
+         * 1. Starts the webcam
+         * 2. Connects to the WebSocket server
+         */
+        async function startSession() {
+            setStatus("Starting webcam...", "status-warn");
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 },
+                    audio: false 
+                });
+                video.srcObject = stream;
+                await video.play();
+                
+                // Set canvas dimensions
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                setStatus("Connecting to server...", "status-warn");
+                connectWebSocket();
+                
+            } catch (err) {
+                console.error("Error starting session:", err);
+                setStatus(`Error: ${err.message}`, "status-bad");
+            }
+        }
+        
+        /**
+         * Sends an "END_SESSION" event to the server and closes everything.
+         */
+        function endSession() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                logEvent({ event: "END_SESSION", message: "You clicked to end the session."});
+                socket.send(JSON.stringify({ event: "END_SESSION" }));
+            }
+            // Close everything down regardless of socket state
+            cleanup();
+        }
+
+        /**
+         * Creates the WebSocket connection and sets up its event handlers.
+         */
+        function connectWebSocket() {
+            socket = new WebSocket(WEBSOCKET_URL);
+            
+            socket.onopen = onSocketOpen;
+            socket.onmessage = onSocketMessage;
+            socket.onclose = onSocketClose;
+            socket.onerror = onSocketError;
+        }
+
+        /**
+         * Called when the socket connection is first opened.
+         * Captures and sends the initial registration frame.
+         */
+        function onSocketOpen() {
+            setStatus("Connected. Registering face...", "status-warn");
+            // Capture and send the first frame for registration
+            captureAndSendFrame();
+            
+            // Update UI
+            startButton.disabled = true;
+            endButton.disabled = false;
+        }
+
+        /**
+         * Handles all messages received from the server.
+         */
+        function onSocketMessage(event) {
+            try {
+                const data = JSON.parse(event.data);
+                
+                // Log every event
+                logEvent(data);
+
+                switch (data.event) {
+                    case "AUTHORIZED":
+                        setStatus("Registration complete. Proctoring...", "status-good");
+                        // Start the proctoring loop
+                        startProctoringLoop();
+                        break;
+                    
+                    case "UNAUTHORIZED":
+                        setStatus(`Registration Failed: ${data.message}`, "status-bad");
+                        cleanup(); // Stop everything
+                        break;
+                    
+                    case "ERROR":
+                        setStatus(`Server Error: ${data.message}`, "status-bad");
+                        cleanup(); // Stop everything
+                        break;
+
+                    case "SESSION_ENDED":
+                        setStatus("Session ended by server.", "status-good");
+                        cleanup();
+                        break;
+                    
+                    // For proctoring events, just log them (already done)
+                    // and maybe update the status text briefly
+                    case "PHONE_DETECTED":
+                    case "MULTIPLE_FACES":
+                    case "UNAUTHORIZED_PERSON":
+                        setStatus(data.event, "status-bad");
+                        break;
+                    case "LOOKING_AWAY":
+                        setStatus(data.event, "status-warn");
+                        break;
+                    case "FACE_NOT_FOUND":
+                        setStatus(data.event, "status-warn");
+                        break;
+                }
+            } catch (err) {
+                console.error("Error parsing message:", err);
+            }
+        }
+
+        /**
+         * Called when the connection closes, either expectedly or not.
+         */
+        function onSocketClose(event) {
+            if (event.wasClean) {
+                setStatus("Connection closed cleanly.", "status-good");
+            } else {
+                setStatus(`Connection died (Code: ${event.code})`, "status-bad");
+            }
+            cleanup();
+        }
+
+        /**
+         * Called on a WebSocket connection error.
+         */
+        function onSocketError(error) {
+            console.error("WebSocket Error:", error);
+            setStatus("Connection Error. See console.", "status-bad");
+            cleanup();
+        }
+        
+        /**
+         * Starts the interval timer to send frames to the server.
+         */
+        function startProctoringLoop() {
+            if (proctoringInterval) {
+                clearInterval(proctoringInterval);
+            }
+            // Start sending frames at the specified interval
+            proctoringInterval = setInterval(() => {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    captureAndSendFrame();
+                } else {
+                    console.warn("Socket not open. Stopping loop.");
+                    cleanup();
+                }
+            }, FRAME_INTERVAL_MS);
+        }
+
+        /**
+         * Captures a frame from the video, draws it to the canvas,
+         * and sends it to the server as a JPEG Blob.
+         */
+        function captureAndSendFrame() {
+            if (video.readyState < video.HAVE_CURRENT_DATA) {
+                console.warn("Video not ready, skipping frame.");
+                return;
+            }
+            
+            const context = canvas.getContext('2d');
+            // Flip the image horizontally to match the mirrored video
+            context.translate(canvas.width, 0);
+            context.scale(-1, 1);
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Reset the transform
+            context.setTransform(1, 0, 0, 1, 0, 0);
+
+            // Send as a high-quality JPEG blob
+            canvas.toBlob((blob) => {
+                if (blob && socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(blob);
+                }
+            }, 'image/jpeg', 0.8); // 80% quality
+        }
+
+        /**
+         * Adds an event to the on-screen log.
+         */
+        function logEvent(data) {
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            let message = data.message || '';
+            if (data.count) message = `${data.count} faces found.`;
+            if (data.score) message = `Score: ${data.score}`;
+            if (data.similarity) message = `Similarity: ${data.similarity.toFixed(2)}`;
+
+            entry.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-event log-event-${data.event}">${data.event}</span>
+                <span class="log-message">${message}</span>
+            `;
+            // Insert at the top
+            eventLog.prepend(entry);
+        }
+
+        /**
+         * Stops all intervals, closes the socket, stops the webcam,
+         * and resets the UI.
+         */
+        function cleanup() {
+            if (proctoringInterval) {
+                clearInterval(proctoringInterval);
+                proctoringInterval = null;
+            }
+            if (socket) {
+                socket.close();
+                socket = null;
+            }
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            startButton.disabled = false;
+            endButton.disabled = true;
+        }
+
+        /**
+         * Updates the main status text and color.
+         */
+        function setStatus(message, className) {
+            statusEl.textContent = `Status: ${message}`;
+            statusEl.className = className;
+        }
+
+    </script>
+</body>
+</html>
+
